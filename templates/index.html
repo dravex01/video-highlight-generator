@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Videó Feldolgozó</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --background: #f8fafc;
+            --text: #1e293b;
+            --gradient-start: #6366f1;
+            --gradient-end: #a855f7;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+            color: var(--text);
+            display: grid;
+            place-items: center;
+            padding: 2rem;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 1.5rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            padding: 3rem;
+            width: 100%;
+            max-width: 800px;
+            transition: transform 0.3s ease;
+        }
+
+        .upload-section {
+            border: 2px dashed #cbd5e1;
+            border-radius: 1rem;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-section:hover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .preview-video {
+            width: 100%;
+            border-radius: 0.5rem;
+            margin-top: 1rem;
+            display: none;
+        }
+
+        .form-group {
+            margin: 2rem 0;
+        }
+
+        .keyword-input {
+            width: 100%;
+            padding: 1rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 0.75rem;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .submit-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 0.75rem;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 1rem 0;
+            display: none;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 0.75rem;
+            margin: 1rem 0;
+            display: none;
+        }
+
+        .alert.success {
+            background: #dcfce7;
+            color: #16a34a;
+            border: 2px solid #86efac;
+        }
+
+        .alert.error {
+            background: #fee2e2;
+            color: #dc2626;
+            border: 2px solid #fca5a5;
+        }
+
+        .result-section {
+            display: none;
+            text-align: center;
+        }
+
+        .download-btn {
+            margin-top: 1rem;
+            background: #10b981;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">AI Videó Feldolgozó</h1>
+        <p class="subtitle">Feltöltés után automatikusan kiemeli a legfontosabb részeket!</p>
+
+        <div class="alert" id="alert"></div>
+
+        <div class="upload-section" id="dropZone">
+            <i class="fas fa-cloud-upload-alt upload-icon"></i>
+            <h3>Húzd ide a videófájlod</h3>
+            <p>vagy kattints a feltöltéshez</p>
+            <input type="file" id="fileInput" accept="video/*" hidden>
+            <video class="preview-video" id="videoPreview" controls></video>
+        </div>
+
+        <div class="form-group">
+            <input type="text" class="keyword-input" id="keywordInput" 
+                   placeholder="Keresett kifejezés (opcionális)...">
+        </div>
+
+        <div class="progress-bar">
+            <div class="progress-fill"></div>
+        </div>
+
+        <button class="submit-btn" id="submitBtn">
+            <span>Feldolgozás indítása</span>
+            <div class="loader"></div>
+        </button>
+
+        <div class="result-section" id="resultSection">
+            <h3>Kész! Letöltheted az eredményt:</h3>
+            <a href="#" class="download-btn" id="downloadLink">
+                <i class="fas fa-download"></i>
+                Letöltés
+            </a>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const videoPreview = document.getElementById('videoPreview');
+        const submitBtn = document.getElementById('submitBtn');
+        const alertBox = document.getElementById('alert');
+        const progressBar = document.querySelector('.progress-bar');
+        const progressFill = document.querySelector('.progress-fill');
+        const resultSection = document.getElementById('resultSection');
+        const downloadLink = document.getElementById('downloadLink');
+        const keywordInput = document.getElementById('keywordInput');
+
+        let currentFile = null;
+
+        // Drag and drop handlers
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            handleFile(e.dataTransfer.files[0]);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            handleFile(e.target.files[0]);
+        });
+
+        function handleFile(file) {
+            if (!file) return;
+
+            if (!file.type.startsWith('video/')) {
+                showAlert('Csak videófájlok engedélyezettek!', 'error');
+                return;
+            }
+
+            if (file.size > 100 * 1024 * 1024) {
+                showAlert('A fájl mérete túl nagy! Max 100MB.', 'error');
+                return;
+            }
+
+            currentFile = file;
+            videoPreview.style.display = 'block';
+            videoPreview.src = URL.createObjectURL(file);
+        }
+
+        submitBtn.addEventListener('click', async () => {
+            if (!currentFile) {
+                showAlert('Előbb válassz ki egy videófájlt!', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('video', currentFile);
+            formData.append('keyword', keywordInput.value);
+
+            try {
+                toggleLoading(true);
+                
+                const response = await fetch('/process', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    
+                    downloadLink.href = url;
+                    downloadLink.download = 'videó_kivonat.mp4';
+                    resultSection.style.display = 'block';
+                    showAlert('Sikeres feldolgozás!', 'success');
+                } else {
+                    const error = await response.text();
+                    showAlert(error, 'error');
+                }
+            } catch (err) {
+                showAlert('Hálózati hiba történt!', 'error');
+            } finally {
+                toggleLoading(false);
+            }
+        });
+
+        function toggleLoading(isLoading) {
+            submitBtn.disabled = isLoading;
+            submitBtn.querySelector('span').textContent = isLoading 
+                ? 'Feldolgozás folyamatban...' 
+                : 'Feldolgozás indítása';
+            progressBar.style.display = isLoading ? 'block' : 'none';
+        }
+
+        function showAlert(message, type = 'error') {
+            alertBox.textContent = message;
+            alertBox.className = `alert ${type}`;
+            alertBox.style.display = 'block';
+            setTimeout(() => {
+                alertBox.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
